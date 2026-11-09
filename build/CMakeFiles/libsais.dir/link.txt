@@ -1,2 +1,0 @@
-"/usr/bin/gcc-ar" qc liblibsais.a CMakeFiles/libsais.dir/libsais/src/libsais.c.o
-"/usr/bin/gcc-ranlib" liblibsais.a

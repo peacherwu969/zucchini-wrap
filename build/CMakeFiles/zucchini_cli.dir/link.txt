@@ -1,1 +1,0 @@
-/usr/bin/g++ -O3 -DNDEBUG -flto=auto -fno-fat-lto-objects CMakeFiles/zucchini_cli.dir/app/zucchini_main.cc.o -o zucchini  libzucchini.a liblibsais.a
