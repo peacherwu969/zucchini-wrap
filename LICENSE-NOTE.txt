@@ -1,0 +1,4 @@
+This directory contains newly written build/wrapper/compatibility files.
+The AOSP Zucchini source is not redistributed here; point CMake at your own
+external/zucchini checkout. Preserve the license and notice files from that
+source tree when redistributing resulting source packages or binaries.

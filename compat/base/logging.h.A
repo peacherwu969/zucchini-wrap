@@ -1,0 +1,172 @@
+#ifndef ZUCCHINI_STANDALONE_BASE_LOGGING_H_
+#define ZUCCHINI_STANDALONE_BASE_LOGGING_H_
+
+#include <cerrno>
+#include <cstdlib>
+#include <cstring>
+#include <iostream>
+#include <ostream>
+#include <sstream>
+#include <string>
+
+namespace base_compat {
+
+class NullBuffer : public std::streambuf {
+ protected:
+  int overflow(int ch) override { return ch; }
+};
+
+inline std::ostream& NullStream() {
+  static NullBuffer buffer;
+  static std::ostream stream(&buffer);
+  return stream;
+}
+
+inline bool IsFatalSeverity(const char* severity) {
+  return std::strcmp(severity, "FATAL") == 0;
+}
+
+class LogMessage {
+ public:
+  LogMessage(const char* file,
+             int line,
+             const char* severity,
+             bool enabled = true,
+             bool append_errno = false)
+      : file_(file),
+        line_(line),
+        severity_(severity),
+        enabled_(enabled),
+        fatal_(enabled && IsFatalSeverity(severity)),
+        saved_errno_(append_errno ? errno : 0),
+        append_errno_(append_errno) {}
+
+  ~LogMessage() {
+    if (enabled_) {
+      std::cerr << severity_ << " " << file_ << ":" << line_ << ": "
+                << stream_.str();
+      if (append_errno_)
+        std::cerr << ": " << std::strerror(saved_errno_);
+      std::cerr << std::endl;
+    }
+    if (fatal_)
+      std::abort();
+  }
+
+  std::ostream& stream() { return enabled_ ? stream_ : NullStream(); }
+
+ private:
+  const char* file_;
+  int line_;
+  const char* severity_;
+  bool enabled_;
+  bool fatal_;
+  int saved_errno_;
+  bool append_errno_;
+  std::ostringstream stream_;
+};
+
+class CheckMessage {
+ public:
+  CheckMessage(bool condition,
+               const char* expression,
+               const char* file,
+               int line)
+      : failed_(!condition), file_(file), line_(line) {
+    if (failed_)
+      stream_ << "Check failed: " << expression << ". ";
+  }
+
+  ~CheckMessage() {
+    if (!failed_)
+      return;
+    std::cerr << "FATAL " << file_ << ":" << line_ << ": " << stream_.str()
+              << std::endl;
+    std::abort();
+  }
+
+  std::ostream& stream() { return failed_ ? stream_ : NullStream(); }
+
+ private:
+  bool failed_;
+  const char* file_;
+  int line_;
+  std::ostringstream stream_;
+};
+
+template <typename T>
+T* CheckNotNull(T* pointer,
+                const char* expression,
+                const char* file,
+                int line) {
+  if (pointer == nullptr) {
+    std::cerr << "FATAL " << file << ":" << line
+              << ": Check failed: " << expression << " != nullptr."
+              << std::endl;
+    std::abort();
+  }
+  return pointer;
+}
+
+}  // namespace base_compat
+
+#define LOG(severity) \
+  ::base_compat::LogMessage(__FILE__, __LINE__, #severity).stream()
+#define PLOG(severity) \
+  ::base_compat::LogMessage(__FILE__, __LINE__, #severity, true, true).stream()
+#define LOG_IF(severity, condition) \
+  ::base_compat::LogMessage(__FILE__, __LINE__, #severity, \
+                            static_cast<bool>(condition)).stream()
+#define PLOG_IF(severity, condition) \
+  ::base_compat::LogMessage(__FILE__, __LINE__, #severity, \
+                            static_cast<bool>(condition), true).stream()
+
+#ifndef NDEBUG
+#define DLOG(severity) LOG(severity)
+#define DPLOG(severity) PLOG(severity)
+#define DCHECK(condition) CHECK(condition)
+#define DCHECK_EQ(a, b) CHECK_EQ(a, b)
+#define DCHECK_NE(a, b) CHECK_NE(a, b)
+#define DCHECK_LT(a, b) CHECK_LT(a, b)
+#define DCHECK_LE(a, b) CHECK_LE(a, b)
+#define DCHECK_GT(a, b) CHECK_GT(a, b)
+#define DCHECK_GE(a, b) CHECK_GE(a, b)
+#define DCHECK_IS_ON() 1
+#else
+#define DLOG(severity) ::base_compat::NullStream()
+#define DPLOG(severity) ::base_compat::NullStream()
+#define DCHECK(condition) ::base_compat::NullStream()
+#define DCHECK_EQ(a, b) ::base_compat::NullStream()
+#define DCHECK_NE(a, b) ::base_compat::NullStream()
+#define DCHECK_LT(a, b) ::base_compat::NullStream()
+#define DCHECK_LE(a, b) ::base_compat::NullStream()
+#define DCHECK_GT(a, b) ::base_compat::NullStream()
+#define DCHECK_GE(a, b) ::base_compat::NullStream()
+#define DCHECK_IS_ON() 0
+#endif
+
+#ifndef ENABLED_VLOG_LEVEL
+#define ENABLED_VLOG_LEVEL 1
+#endif
+#define VLOG(level) \
+  ::base_compat::LogMessage(__FILE__, __LINE__, "INFO", \
+                            (level) <= ENABLED_VLOG_LEVEL).stream()
+#define VLOG_IS_ON(level) ((level) <= ENABLED_VLOG_LEVEL)
+#define DVLOG(level) VLOG(level)
+
+#define CHECK(condition) \
+  (static_cast<bool>(condition)) \
+      ? ::base_compat::NullStream() \
+      : ::base_compat::CheckMessage(false, #condition, __FILE__, __LINE__).stream()
+#define CHECK_EQ(a, b) CHECK((a) == (b))
+#define CHECK_NE(a, b) CHECK((a) != (b))
+#define CHECK_LT(a, b) CHECK((a) < (b))
+#define CHECK_LE(a, b) CHECK((a) <= (b))
+#define CHECK_GT(a, b) CHECK((a) > (b))
+#define CHECK_GE(a, b) CHECK((a) >= (b))
+#define PCHECK(condition) \
+  CHECK(condition) << "errno=" << errno << " (" << std::strerror(errno) << ") "
+#define CHECK_NOTNULL(pointer) \
+  ::base_compat::CheckNotNull((pointer), #pointer, __FILE__, __LINE__)
+
+#endif  // ZUCCHINI_STANDALONE_BASE_LOGGING_H_

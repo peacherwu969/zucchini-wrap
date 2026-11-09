@@ -1,0 +1,4 @@
+#ifndef ZUCCHINI_STANDALONE_BASE_CALLBACK_FORWARD_H_
+#define ZUCCHINI_STANDALONE_BASE_CALLBACK_FORWARD_H_
+#include "base/callback.h"
+#endif
